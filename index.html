@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Quest VR Tower RPG - Milestone 5</title>
+
+<script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
+
+<style>
+body { margin:0; overflow:hidden; }
+
+#ui {
+    position:fixed;
+    top:10px;
+    left:10px;
+    background:rgba(0,0,0,0.6);
+    color:white;
+    padding:10px;
+    width:240px;
+    font-family:Arial;
+    font-size:14px;
+    z-index:999;
+}
+button { width:100%; margin-top:4px; }
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+    <div><b>Quest VR RPG</b></div>
+    <div>Floor: <span id="floor">1</span></div>
+    <div>Boss HP: <span id="boss">--</span></div>
+    <div>Player HP: <span id="hp">120</span></div>
+
+    <button onclick="equip('sword')">Sword</button>
+    <button onclick="equip('bow')">Bow</button>
+    <button onclick="equip('magic')">Magic</button>
+</div>
+
+<a-scene
+    renderer="antialias: true; colorManagement: true"
+    webxr="requiredFeatures: local-floor; optionalFeatures: hand-tracking"
+    vr-mode-ui="enabled: true">
+
+<!-- LIGHTING (Quest optimized) -->
+<a-entity light="type:ambient; intensity:0.7"></a-entity>
+<a-entity light="type:directional; intensity:1" position="1 3 2"></a-entity>
+
+<!-- SIMPLE SKY -->
+<a-sky color="#101018"></a-sky>
+
+<!-- PLAYER RIG -->
+<a-entity id="rig" position="0 1.6 5">
+
+    <a-camera></a-camera>
+
+    <!-- LEFT HAND -->
+    <a-entity id="leftHand"
+              laser-controls="hand:left"
+              raycaster="objects: .hitbox">
+    </a-entity>
+
+    <!-- RIGHT HAND -->
+    <a-entity id="rightHand"
+              laser-controls="hand:right"
+              raycaster="objects: .hitbox">
+    </a-entity>
+
+</a-entity>
+
+<!-- TOWER (LOW POLY STACK) -->
+<a-entity id="tower"></a-entity>
+
+<!-- BOSS -->
+<a-box id="boss"
+    position="0 1.6 -4"
+    depth="0.8"
+    height="0.8"
+    width="0.8"
+    color="red">
+</a-box>
+
+<!-- WEAPON VISUAL -->
+<a-entity id="weaponModel"></a-entity>
+
+</a-scene>
+
+<script>
+
+//////////////////////////////////////////////////////
+// QUEST OPTIMIZED STATE
+//////////////////////////////////////////////////////
+
+let state = {
+    floor: 1,
+    bossHP: 80,
+    playerHP: 120,
+    weapon: "sword"
+};
+
+//////////////////////////////////////////////////////
+// PERFORMANCE SAFE TOWER BUILD
+//////////////////////////////////////////////////////
+
+function buildTower(){
+
+    const tower = document.getElementById("tower");
+    tower.innerHTML = "";
+
+    for(let i=0;i<8;i++){
+
+        let floor = document.createElement("a-box");
+
+        floor.setAttribute("position", `0 ${i*2.5} -8`);
+        floor.setAttribute("width", "5");
+        floor.setAttribute("height", "0.1");
+        floor.setAttribute("depth", "5");
+        floor.setAttribute("color", i % 2 ? "#333" : "#444");
+
+        tower.appendChild(floor);
+    }
+}
+
+//////////////////////////////////////////////////////
+// WEAPON SYSTEM (QUEST FRIENDLY VISUALS)
+//////////////////////////////////////////////////////
+
+function equip(w){
+    state.weapon = w;
+
+    const model = document.getElementById("weaponModel");
+
+    model.innerHTML = "";
+
+    if(w === "sword"){
+        let sword = document.createElement("a-box");
+        sword.setAttribute("position", "0 1.3 -0.5");
+        sword.setAttribute("depth", "0.05");
+        sword.setAttribute("height", "0.6");
+        sword.setAttribute("width", "0.05");
+        sword.setAttribute("color", "silver");
+        model.appendChild(sword);
+    }
+
+    if(w === "bow"){
+        let bow = document.createElement("a-torus");
+        bow.setAttribute("radius", "0.25");
+        bow.setAttribute("radius-tubular", "0.03");
+        bow.setAttribute("position", "0 1.3 -0.5");
+        bow.setAttribute("color", "brown");
+        model.appendChild(bow);
+    }
+
+    if(w === "magic"){
+        let orb = document.createElement("a-sphere");
+        orb.setAttribute("radius", "0.15");
+        orb.setAttribute("position", "0 1.3 -0.5");
+        orb.setAttribute("color", "blue");
+        model.appendChild(orb);
+    }
+}
+
+//////////////////////////////////////////////////////
+// BOSS AI (LOW UPDATE RATE FOR QUEST FPS)
+//////////////////////////////////////////////////////
+
+function bossAI(){
+
+    setInterval(()=>{
+
+        let boss = document.getElementById("boss");
+
+        let x = (Math.random() - 0.5) * 2;
+        boss.setAttribute("position", `${x} 1.6 -4`);
+
+        // damage player
+        state.playerHP -= 4;
+
+        if(state.playerHP <= 0){
+            alert("You were defeated!");
+            state.playerHP = 120;
+        }
+
+        updateUI();
+
+    }, 1500); // SLOWER FOR QUEST PERFORMANCE
+}
+
+//////////////////////////////////////////////////////
+// COMBAT SYSTEM (OPTIMIZED HIT LOGIC)
+//////////////////////////////////////////////////////
+
+function attack(){
+
+    let dmg = 3;
+
+    if(state.weapon === "sword") dmg = 7;
+    if(state.weapon === "bow") dmg = 5;
+    if(state.weapon === "magic") dmg = 9;
+
+    state.bossHP -= dmg;
+
+    if(state.bossHP <= 0){
+        nextFloor();
+    }
+
+    updateUI();
+}
+
+//////////////////////////////////////////////////////
+// FLOOR SYSTEM
+//////////////////////////////////////////////////////
+
+function nextFloor(){
+
+    state.floor++;
+
+    if(state.floor > 10){
+        alert("Tower Cleared!");
+        state.floor = 1;
+    }
+
+    state.bossHP = 70 + state.floor * 15;
+
+    document.getElementById("floor").innerText = state.floor;
+}
+
+//////////////////////////////////////////////////////
+// INPUT (QUEST VR CONTROLLERS)
+//////////////////////////////////////////////////////
+
+document.addEventListener("click", attack);
+
+// Meta Quest trigger support (WebXR standard)
+document.addEventListener("triggerdown", attack);
+
+// grip attack fallback
+document.addEventListener("gripdown", attack);
+
+//////////////////////////////////////////////////////
+// UI
+//////////////////////////////////////////////////////
+
+function updateUI(){
+    document.getElementById("boss").innerText = Math.floor(state.bossHP);
+    document.getElementById("hp").innerText = Math.floor(state.playerHP);
+}
+
+//////////////////////////////////////////////////////
+// INIT
+//////////////////////////////////////////////////////
+
+buildTower();
+bossAI();
+updateUI();
+equip("sword");
+
+</script>
+
+</body>
+</html>
